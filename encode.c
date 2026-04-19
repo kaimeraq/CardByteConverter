@@ -201,7 +201,7 @@ int LoadConf(const char* path, CardConfig* cfg) {
         }
 
         // Entered Data section
-        if (strcmp(line, "[Data]")     == 0) { 
+        if (strcmp(line, "[Data]") == 0) { 
             section = SECTION_DATA;
             continue;
         }
@@ -337,9 +337,9 @@ int main(int argc, char* argv[])
     if (out) {
         fwrite(cfg.cardData, 1, cfg.cardDataSize, out);
         fclose(out);
+        
+        printf("Outputted to cards.dat");
     }
-
-    printf("Outputted to cards.dat");
 
     return 0;
 }
