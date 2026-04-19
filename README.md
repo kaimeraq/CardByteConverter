@@ -6,4 +6,6 @@ The tool outputs to `cards.dat` which I've included for demonstration purposes.
 
 Note that this depends on libiconv which I've linked as a submodule, for this code to work you will need to link `libiconv*.dll` and include `iconv.h` which I purposely left out of my repo.
 
-All code provided "AS IS" and is subject to the MIT license.
+All my code provided "AS IS" and is subject to the MIT license. `libiconv` is linked under [LGPL3.0][1].
+
+[1]: https://www.gnu.org/licenses/lgpl.html
