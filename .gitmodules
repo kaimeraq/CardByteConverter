@@ -1,0 +1,3 @@
+[submodule "ThirdParty"]
+	path = ThirdParty
+	url = https://github.com/pffang/libiconv-for-Windows.git

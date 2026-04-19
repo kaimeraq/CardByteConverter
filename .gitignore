@@ -1,5 +1,5 @@
-# Compiled Object files
+*.exp
+*.pdb
+*.lib
 *.bin
-
-# Executables
 *.exe
