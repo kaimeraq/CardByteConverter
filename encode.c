@@ -67,13 +67,11 @@ static const TokenEntry kTokenMap[] = {
 
 #define TOKEN_MAP_SIZE (sizeof(kTokenMap) / sizeof(kTokenMap[0]))
 
-static int StartsWith(const char* line, const char* prefix)
-{
+static int StartsWith(const char* line, const char* prefix) {
     return strncmp(line, prefix, strlen(prefix)) == 0;
 }
 
-static int ParseInt(const char* line)
-{
+static int ParseInt(const char* line) {
     const char* eq = strchr(line, '=');
     
     if (!eq) {
@@ -83,8 +81,7 @@ static int ParseInt(const char* line)
     return atoi(eq + 1);
 }
 
-static void ParseString(const char* line, char* out, size_t outSize)
-{
+static void ParseString(const char* line, char* out, size_t outSize) {
     const char* eq = strchr(line, '=');
 
     if (!eq) { 
@@ -109,6 +106,16 @@ static char LookupToken(uint32_t cp) {
     }
         
     return '\x7f';
+}
+
+static unsigned char TokenToIndex(char token) {
+    for (size_t i = 0; i < TOKEN_MAP_SIZE; i++) {
+        if (kTokenMap[i].token == token) {
+            return (unsigned char)i;
+        }
+    }
+
+    return 0xFF;
 }
 
 #if defined(LOGGING) && LOGGING == 2
@@ -180,12 +187,10 @@ int LoadConf(const char* path, CardConfig* cfg) {
         return 0;
     }
 
-    while (fgets(line, sizeof(line), f))
-    {
+    while (fgets(line, sizeof(line), f)) {
         // Strip \r\n
         size_t len = strlen(line);
-        while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r'))
-        {
+        while (len > 0 && (line[len-1] == '\n' || line[len-1] == '\r')) {
             line[--len] = '\0';
         }
 
@@ -234,8 +239,7 @@ int LoadConf(const char* path, CardConfig* cfg) {
             }
         }
         else if (section == SECTION_DATA) {
-            if (!TokenizeLine(cd, line, len, cfg->cardData, &cfg->cardDataSize, sizeof(cfg->cardData)))
-            {
+            if (!TokenizeLine(cd, line, len, cfg->cardData, &cfg->cardDataSize, sizeof(cfg->cardData))) {
                 iconv_close(cd);
                 fclose(f);
                 return 0;
@@ -335,9 +339,12 @@ int main(int argc, char* argv[])
 
     FILE* out = fopen("cards.dat", "wb");
     if (out) {
-        fwrite(cfg.cardData, 1, cfg.cardDataSize, out);
+        for (int i = 0; i < cfg.cardDataSize; i++) {
+            unsigned char idx = TokenToIndex(cfg.cardData[i]);
+            fwrite(&idx, 1, 1, out);
+        }
+
         fclose(out);
-        
         printf("Outputted to cards.dat");
     }
 
