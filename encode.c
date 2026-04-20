@@ -4,7 +4,7 @@
 #include <stdint.h>
 
 #include "iconv.h"
- 
+
 #define LOGGING 0
 
 typedef struct {
@@ -19,7 +19,6 @@ typedef struct {
 
     char cardData[8192];
     int  cardDataSize;
-    
 } CardConfig;
 
 typedef struct {
@@ -27,6 +26,7 @@ typedef struct {
     char     token;
 } TokenEntry;
 
+// Unicodes to ascii tokens from palette in cards.conf
 static const TokenEntry kTokenMap[] = {
     {0x250C, 'r'}, 
     {0x2510, 'l'},
@@ -65,47 +65,22 @@ static const TokenEntry kTokenMap[] = {
     {0x15C5, 'A'},
 };
 
+// Num entries in kTokenMap
 #define TOKEN_MAP_SIZE (sizeof(kTokenMap) / sizeof(kTokenMap[0]))
-
-static int StartsWith(const char* line, const char* prefix) {
-    return strncmp(line, prefix, strlen(prefix)) == 0;
-}
-
-static int ParseInt(const char* line) {
-    const char* eq = strchr(line, '=');
-    
-    if (!eq) {
-        return 0;
-    }
-    
-    return atoi(eq + 1);
-}
-
-static void ParseString(const char* line, char* out, size_t outSize) {
-    const char* eq = strchr(line, '=');
-
-    if (!eq) { 
-        out[0] = '\0'; 
-        return; 
-    }
-
-    strncpy(out, eq + 1, outSize - 1);
-    out[outSize - 1] = '\0';
-}
 
 static char LookupToken(uint32_t cp) {
     if (cp == ' ')   return '.';
     if (cp == '\\')  return '\\';
     if (cp == '/')   return '/';
     if (cp < 0x80)   return (char)cp;
-
+    
     for (size_t i = 0; i < TOKEN_MAP_SIZE; i++) {
         if (kTokenMap[i].codepoint == cp) {
             return kTokenMap[i].token;
         }
     }
-        
-    return '\x7f';
+    
+    return '?'; // Unknown codepoint
 }
 
 static unsigned char TokenToIndex(char token) {
@@ -114,8 +89,8 @@ static unsigned char TokenToIndex(char token) {
             return (unsigned char)i;
         }
     }
-
-    return 0xFF;
+    
+    return '?'; // Unknown token
 }
 
 #if defined(LOGGING) && LOGGING == 2
@@ -156,7 +131,7 @@ static int TokenizeLine(iconv_t cd, const char* line, size_t lineLen,
     }
 
     iconv(cd, NULL, NULL, NULL, NULL);
-
+    
 #if defined(LOGGING) && LOGGING == 2
     gLineCount++;
     gTokenCount += (*outPos - before);
@@ -166,7 +141,60 @@ static int TokenizeLine(iconv_t cd, const char* line, size_t lineLen,
     return 1;
 }
 
+static int StartsWith(const char* line, const char* prefix) {
+    return strncmp(line, prefix, strlen(prefix)) == 0;
+}
+
+static int ParseInt(const char* line) {
+    const char* eq = strchr(line, '=');
+    
+    if (!eq) {
+        return 0;
+    }
+    
+    return atoi(eq + 1);
+}
+
+static void ParseString(const char* line, char* out, size_t outSize) {
+    const char* eq = strchr(line, '=');
+
+    if (!eq) { 
+        out[0] = '\0'; 
+        return; 
+    }
+
+    strncpy(out, eq + 1, outSize - 1);
+    out[outSize - 1] = '\0';
+}
+
 typedef enum { SECTION_NONE, SECTION_SETTINGS, SECTION_DATA } Section;
+
+static void ParseSetting(const char* line, CardConfig* cfg, iconv_t cd) {
+    if (StartsWith(line, "WIDTH=")) {
+        cfg->width = ParseInt(line);
+    }
+    else if (StartsWith(line, "HEIGHT=")) {
+        cfg->height = ParseInt(line);
+    }
+    else if (StartsWith(line, "NUM_VALUES=")) {
+        cfg->numValues = ParseInt(line);
+    }
+    else if (StartsWith(line, "NUM_SUITS=")) {
+        cfg->numSuits = ParseInt(line);
+    }
+    else if (StartsWith(line, "COLORIZER_CODE=")) {
+        cfg->colorizerCode = ParseInt(line);
+    }
+    else if (StartsWith(line, "COLORIZER_BLACKLIST=")) {
+        char raw[512];
+        ParseString(line, raw, sizeof(raw));
+
+        int pos = 0;
+        TokenizeLine(cd, raw, strlen(raw), cfg->colorizerBlacklist, &pos, sizeof(cfg->colorizerBlacklist));
+
+        cfg->colorizerBlacklistSize = pos;
+    }
+}
 
 int LoadConf(const char* path, CardConfig* cfg) {
     FILE* f = fopen(path, "r");
@@ -213,30 +241,7 @@ int LoadConf(const char* path, CardConfig* cfg) {
 
         // Handling settings or data
         if (section == SECTION_SETTINGS) {
-            if (StartsWith(line, "WIDTH=")) {
-                cfg->width = ParseInt(line);
-            }
-            else if (StartsWith(line, "HEIGHT=")) {
-                cfg->height = ParseInt(line);
-            }
-            else if (StartsWith(line, "NUM_VALUES=")) {
-                cfg->numValues = ParseInt(line);
-            }
-            else if (StartsWith(line, "NUM_SUITS=")) {
-                cfg->numSuits = ParseInt(line);
-            }
-            else if (StartsWith(line, "COLORIZER_CODE=")) {
-                cfg->colorizerCode = ParseInt(line);
-            }
-            else if (StartsWith(line, "COLORIZER_BLACKLIST=")) {
-                char raw[512];
-                ParseString(line, raw, sizeof(raw));
-
-                int pos = 0;
-                TokenizeLine(cd, raw, strlen(raw), cfg->colorizerBlacklist, &pos, sizeof(cfg->colorizerBlacklist));
-
-                cfg->colorizerBlacklistSize = pos;
-            }
+            ParseSetting(line, cfg, cd);
         }
         else if (section == SECTION_DATA) {
             if (!TokenizeLine(cd, line, len, cfg->cardData, &cfg->cardDataSize, sizeof(cfg->cardData))) {
@@ -321,7 +326,7 @@ int main(int argc, char* argv[])
         fprintf(stderr, "Card index %d out of range (0..%d)\n", cardIndex, totalCards - 1);
         return 1;
     }
-
+    
     printf("\nCard %d:\n", cardIndex);
     
     const char* card = cfg.cardData + cardIndex * cardSize;
@@ -330,7 +335,7 @@ int main(int argc, char* argv[])
         for (int col = 0; col < cfg.width; col++) {
             putchar(card[row * cfg.width + col]);
         }
-            
+        
         putchar('\n');
     }
 
